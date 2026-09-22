@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Miniatures Photo — 220×160</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #f0f0f0;
+      --muted: #999;
+      --accent: #e8b923;
+      --accent-hover: #f0c94a;
+      --success: #3dd68c;
+      --danger: #f07178;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    label.field {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input[type="text"] {
+      width: 100%;
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      color: var(--text);
+      font-size: 1rem;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+    }
+    .dropzone:hover,
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(232, 185, 35, 0.06);
+    }
+    .dropzone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .dropzone .icon { font-size: 2.2rem; margin-bottom: 0.5rem; }
+    .dropzone strong { color: var(--accent); }
+    .dropzone .hint { color: var(--muted); font-size: 0.85rem; margin-top: 0.35rem; }
+
+    .preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .preview-item {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #111;
+      border: 1px solid var(--border);
+      aspect-ratio: 220 / 160;
+    }
+    .preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .preview-item .num {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .preview-item .remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-item .remove:hover { background: var(--danger); }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 0.7rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #111;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-secondary {
+      background: #2a2a2a;
+      color: var(--text);
+    }
+    .btn-secondary:hover:not(:disabled) { background: #333; }
+
+    .status {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      min-height: 1.4em;
+    }
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--danger); }
+
+    .progress-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 0.75rem;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar.on { display: block; }
+    .progress-bar span {
+      display: block;
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.2s;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 2.5rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Miniatures Photo</h1>
+      <p>Génère des miniatures 220×160 et un ZIP prêt pour le carnet de voyage</p>
+    </header>
+
+    <div class="card">
+      <label class="field" for="galleryName">Nom de la galerie (dossier)</label>
+      <input type="text" id="galleryName" placeholder="ex. san-cristobal, palenque, tulum…" value="photos" />
+    </div>
+
+    <div class="card">
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple />
+        <div class="icon">📷</div>
+        <div><strong>Clique</strong> ou glisse tes photos ici</div>
+        <div class="hint">JPEG, PNG, WebP — plusieurs fichiers acceptés</div>
+      </div>
+      <div class="preview" id="preview"></div>
+      <div class="actions">
+        <button type="button" class="btn-primary" id="btnZip" disabled>Générer le ZIP</button>
+        <button type="button" class="btn-secondary" id="btnClear" disabled>Tout effacer</button>
+      </div>
+      <div class="progress-bar" id="progress"><span></span></div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <footer>
+      Miniatures 220×160 centrées · Structure <code>photos/…</code> + <code>thumbs/…</code><br />
+      Fonctionne 100 % dans le navigateur — aucune photo n’est envoyée sur un serveur.
+    </footer>
+  </div>
+
+  <script>
+    const THUMB_W = 220;
+    const THUMB_H = 160;
+    const JPEG_QUALITY = 0.85;
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('preview');
+    const btnZip = document.getElementById('btnZip');
+    const btnClear = document.getElementById('btnClear');
+    const status = document.getElementById('status');
+    const progress = document.getElementById('progress');
+    const progressBar = progress.querySelector('span');
+    const galleryNameInput = document.getElementById('galleryName');
+
+    /** @type {{ file: File, url: string, name: string }[]} */
+    let items = [];
+
+    function pad(n) {
+      return String(n).padStart(2, '0');
+    }
+
+    function setStatus(msg, type = '') {
+      status.textContent = msg;
+      status.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function updateButtons() {
+      const has = items.length > 0;
+      btnZip.disabled = !has;
+      btnClear.disabled = !has;
+    }
+
+    function renderPreview() {
+      preview.innerHTML = '';
+      items.forEach((item, i) => {
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+        div.innerHTML = `
+          <img src="${item.url}" alt="" />
+          <span class="num">${pad(i + 1)}</span>
+          <button type="button" class="remove" data-i="${i}" title="Retirer">×</button>
+        `;
+        preview.appendChild(div);
+      });
+      preview.querySelectorAll('.remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const i = +btn.dataset.i;
+          URL.revokeObjectURL(items[i].url);
+          items.splice(i, 1);
+          renderPreview();
+          updateButtons();
+          setStatus(items.length ? `${items.length} photo(s)` : '');
+        });
+      });
+    }
+
+    function addFiles(fileList) {
+      const files = Array.from(fileList).filter(f => f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+      if (!files.length) {
+        setStatus('Aucun fichier image valide.', 'err');
+        return;
+      }
+      files.forEach(file => {
+        items.push({
+          file,
+          url: URL.createObjectURL(file),
+          name: file.name
+        });
+      });
+      // Tri alphabétique par nom de fichier d’origine
+      items.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+      renderPreview();
+      updateButtons();
+      setStatus(`${items.length} photo(s) prête(s)`);
+    }
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) addFiles(fileInput.files);
+      fileInput.value = '';
+    });
+
+    ['dragenter', 'dragover'].forEach(ev => {
+      dropzone.addEventListener(ev, e => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+      dropzone.addEventListener(ev, e => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      });
+    });
+    dropzone.addEventListener('drop', e => {
+      if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+    });
+
+    btnClear.addEventListener('click', () => {
+      items.forEach(i => URL.revokeObjectURL(i.url));
+      items = [];
+      renderPreview();
+      updateButtons();
+      setStatus('');
+      progress.classList.remove('on');
+      progressBar.style.width = '0%';
+    });
+
+    /**
+     * Charge une image File → HTMLImageElement
+     */
+    function loadImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Impossible de lire : ' + file.name));
+        };
+        img.src = url;
+      });
+    }
+
+    /**
+     * Crop centré + resize vers 220×160, retourne un Blob JPEG
+     */
+    function makeThumb(img) {
+      const canvas = document.createElement('canvas');
+      canvas.width = THUMB_W;
+      canvas.height = THUMB_H;
+      const ctx = canvas.getContext('2d');
+
+      const srcW = img.naturalWidth;
+      const srcH = img.naturalHeight;
+      const scale = Math.max(THUMB_W / srcW, THUMB_H / srcH);
+      const drawW = srcW * scale;
+      const drawH = srcH * scale;
+      const dx = (THUMB_W - drawW) / 2;
+      const dy = (THUMB_H - drawH) / 2;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, THUMB_W, THUMB_H);
+      ctx.drawImage(img, dx, dy, drawW, drawH);
+
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(
+          blob => (blob ? resolve(blob) : reject(new Error('Échec génération miniature'))),
+          'image/jpeg',
+          JPEG_QUALITY
+        );
+      });
+    }
+
+    /**
+     * Convertit n’importe quelle image en JPEG (grande version)
+     * pour uniformiser le ZIP (toujours .jpg)
+     */
+    function toJpegBlob(img, quality = 0.92) {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(
+          blob => (blob ? resolve(blob) : reject(new Error('Échec conversion JPEG'))),
+          'image/jpeg',
+          quality
+        );
+      });
+    }
+
+    function sanitizeGalleryName(name) {
+      return (name || 'photos')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9_-]/g, '')
+        || 'photos';
+    }
+
+    btnZip.addEventListener('click', async () => {
+      if (!items.length) return;
+
+      const gallery = sanitizeGalleryName(galleryNameInput.value);
+      btnZip.disabled = true;
+      btnClear.disabled = true;
+      progress.classList.add('on');
+      progressBar.style.width = '0%';
+      setStatus('Génération en cours…');
+
+      try {
+        const zip = new JSZip();
+        const folder = zip.folder(gallery);
+        const thumbs = folder.folder('thumbs');
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const num = pad(i + 1);
+          setStatus(`Traitement ${num} / ${pad(items.length)} — ${item.name}`);
+
+          const img = await loadImage(item.file);
+          const [fullBlob, thumbBlob] = await Promise.all([
+            toJpegBlob(img, 0.92),
+            makeThumb(img)
+          ]);
+
+          folder.file(`${num}.jpg`, fullBlob);
+          thumbs.file(`${num}.jpg`, thumbBlob);
+
+          progressBar.style.width = `${Math.round(((i + 1) / items.length) * 100)}%`;
+        }
+
+        setStatus('Création du ZIP…');
+        const content = await zip.generateAsync({
+          type: 'blob',
+          compression: 'DEFLATE',
+          compressionOptions: { level: 6 }
+        }, (meta) => {
+          // optionnel : progression zip
+        });
+
+        const zipName = `${gallery}-photos-thumbs.zip`;
+        saveAs(content, zipName);
+        setStatus(`✓ ZIP téléchargé : ${zipName} (${items.length} photo(s) + miniatures)`, 'ok');
+      } catch (err) {
+        console.error(err);
+        setStatus('Erreur : ' + (err.message || String(err)), 'err');
+      } finally {
+        btnZip.disabled = false;
+        btnClear.disabled = false;
+        progressBar.style.width = '100%';
+        setTimeout(() => progress.classList.remove('on'), 800);
+      }
+    });
+  </script>
+</body>
+</html>
